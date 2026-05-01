@@ -93,6 +93,32 @@ python voice_input.py
 
 `Alt+Tab`、`Alt+F4` 这类组合键不会触发录音切换；脚本只响应“单独轻按 Alt”。
 
+## 开机自启
+
+本项目提供 `run_voice_input.sh` 和 `voice-input-assistant.desktop`。已安装到当前用户的自启动目录后，登录桌面时会自动运行：
+
+```bash
+~/.config/autostart/voice-input-assistant.desktop
+```
+
+自启动日志写入：
+
+```bash
+~/.local/state/voice-input/voice_input.log
+```
+
+如果只是想临时关掉当前正在运行的助手：
+
+```bash
+pkill -f '/home/futureoo/Desktop/voice_input/voice_input.py'
+```
+
+如果想永久关闭开机自启，可以打开 Ubuntu 的“启动应用程序”并禁用 `Voice Input Assistant`，也可以删除自启动文件：
+
+```bash
+rm ~/.config/autostart/voice-input-assistant.desktop
+```
+
 ## 默认行为
 
 - 开始录音前用 `wpctl` 检查默认麦克风；如果静音或音量接近 0，会自动解除静音并设置为 30%，同时弹出系统通知。

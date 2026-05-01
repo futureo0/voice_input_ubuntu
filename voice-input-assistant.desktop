@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Voice Input Assistant
+Comment=Alt/M585 voice input assistant
+Exec=/home/futureoo/Desktop/voice_input/run_voice_input.sh
+Path=/home/futureoo/Desktop/voice_input
+Icon=audio-input-microphone
+Terminal=false
+StartupNotify=false
+X-GNOME-Autostart-enabled=true
+Categories=Utility;
