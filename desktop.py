@@ -5,6 +5,7 @@ import subprocess
 import threading
 import time
 from math import log10
+import re
 
 from config import Config
 
@@ -12,10 +13,15 @@ from config import Config
 class SystemNotifier:
     def __init__(self, enabled: bool = True):
         self.enabled = enabled and shutil.which("notify-send") is not None
+        self.dbus_enabled = enabled and shutil.which("gdbus") is not None
         self.replace_id: str | None = None
         self.lock = threading.Lock()
 
     def send_once(self, summary: str, body: str, timeout_ms: int = 4000) -> None:
+        if not (self.enabled or self.dbus_enabled):
+            return
+        if self._dbus_notify(summary, body, timeout_ms=timeout_ms, replace_id=0) is not None:
+            return
         if not self.enabled:
             return
         self._run(
@@ -33,9 +39,22 @@ class SystemNotifier:
         )
 
     def replace(self, summary: str, body: str, timeout_ms: int = 0) -> None:
-        if not self.enabled:
+        if not (self.enabled or self.dbus_enabled):
             return
         with self.lock:
+            notification_id = self._dbus_notify(
+                summary,
+                body,
+                timeout_ms=timeout_ms,
+                replace_id=int(self.replace_id or "0"),
+            )
+            if notification_id is not None:
+                self.replace_id = str(notification_id)
+                return
+
+            if not self.enabled:
+                return
+
             command = [
                 "notify-send",
                 "-a",
@@ -44,16 +63,55 @@ class SystemNotifier:
                 "audio-input-microphone",
                 "-t",
                 str(timeout_ms),
+                "-p",
             ]
             if self.replace_id:
                 command.extend(["-r", self.replace_id])
-            else:
-                command.append("-p")
             command.extend([summary, body])
             result = self._run(command)
             notification_id = result.stdout.strip() if result else ""
             if notification_id.isdigit():
                 self.replace_id = notification_id
+
+    def _dbus_notify(
+        self,
+        summary: str,
+        body: str,
+        *,
+        timeout_ms: int,
+        replace_id: int,
+    ) -> int | None:
+        if not self.dbus_enabled:
+            return None
+
+        result = self._run(
+            [
+                "gdbus",
+                "call",
+                "--session",
+                "--dest",
+                "org.freedesktop.Notifications",
+                "--object-path",
+                "/org/freedesktop/Notifications",
+                "--method",
+                "org.freedesktop.Notifications.Notify",
+                _gvariant_string("Voice Input"),
+                str(replace_id),
+                _gvariant_string("audio-input-microphone"),
+                _gvariant_string(summary),
+                _gvariant_string(body),
+                "[]",
+                "{}",
+                str(timeout_ms),
+            ]
+        )
+        if result is None or result.returncode != 0:
+            return None
+
+        match = re.search(r"uint32\s+(\d+)|\((\d+),\)", result.stdout)
+        if match is None:
+            return None
+        return int(next(value for value in match.groups() if value is not None))
 
     @staticmethod
     def _run(command: list[str]) -> subprocess.CompletedProcess[str] | None:
@@ -67,6 +125,10 @@ class SystemNotifier:
             )
         except OSError:
             return None
+
+
+def _gvariant_string(value: str) -> str:
+    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
 class SoundPlayer:
