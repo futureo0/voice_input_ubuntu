@@ -9,6 +9,7 @@ from evdev import InputDevice, UInput, UInputError, ecodes, list_devices
 
 
 class AltTapListener:
+    RESCAN_SECONDS = 5.0
     ALT_KEYS = {ecodes.KEY_LEFTALT, ecodes.KEY_RIGHTALT}
     HWHEEL_CODES = tuple(
         code
@@ -45,18 +46,29 @@ class AltTapListener:
         self.proxies: dict[int, UInput] = {}
         self.packet_buffers: dict[int, list] = {}
         self.m585_wheel_block_until: dict[int, float] = {}
+        self.device_paths: dict[int, str] = {}
+        self.permission_denied_paths: set[str] = set()
         self.last_tap_at = 0.0
 
-    def open_devices(self) -> None:
-        for path in list_devices():
+    def open_devices(self, *, require_any: bool = True) -> int:
+        opened = 0
+        paths = list(list_devices())
+        self._close_missing_devices(paths)
+
+        for path in paths:
+            if path in self.device_paths.values():
+                continue
             try:
                 device = InputDevice(path)
+                self.permission_denied_paths.discard(path)
                 capabilities = device.capabilities().get(ecodes.EV_KEY, [])
                 listens_for_alt = any(code in capabilities for code in self.ALT_KEYS)
                 listens_for_m585 = self._is_m585_wheel_device(device)
                 if listens_for_alt or listens_for_m585:
                     self.selector.register(device.fd, selectors.EVENT_READ, device)
                     self.devices[device.fd] = device
+                    self.device_paths[device.fd] = device.path
+                    opened += 1
                     labels: list[str] = []
                     if listens_for_alt:
                         labels.append("keyboard")
@@ -70,15 +82,18 @@ class AltTapListener:
                 else:
                     device.close()
             except PermissionError:
-                print(f"Permission denied: {path}", file=sys.stderr)
+                if path not in self.permission_denied_paths:
+                    self.permission_denied_paths.add(path)
+                    print(f"Permission denied: {path}", file=sys.stderr)
             except OSError:
                 continue
 
-        if not self.devices:
+        if require_any and not self.devices:
             raise SystemExit(
                 "No readable keyboard or M585 wheel devices found. Add the user to the input group "
                 "or run this script with sudo."
             )
+        return opened
 
     def run(self) -> None:
         self.open_devices()
@@ -88,13 +103,15 @@ class AltTapListener:
         print(f"Ready. Tap {' or '.join(trigger_names)} to start/stop recording.", flush=True)
         try:
             while True:
-                for key, _ in self.selector.select():
+                for key, _ in self.selector.select(timeout=self.RESCAN_SECONDS):
                     device: InputDevice = key.data
                     try:
                         for event in device.read():
                             self._handle_event(device, event)
-                    except OSError:
+                    except OSError as exc:
+                        print(f"Input device disconnected: {device.path} ({device.name}): {exc}", file=sys.stderr)
                         self._close_device(device)
+                self.open_devices(require_any=False)
         finally:
             self.close()
 
@@ -219,6 +236,15 @@ class AltTapListener:
         for device in list(self.devices.values()):
             self._close_device(device)
 
+    def _close_missing_devices(self, current_paths: list[str]) -> None:
+        current_path_set = set(current_paths)
+        for fd, path in list(self.device_paths.items()):
+            if path not in current_path_set:
+                device = self.devices.get(fd)
+                if device is not None:
+                    print(f"Input device removed: {device.path} ({device.name})", file=sys.stderr)
+                    self._close_device(device)
+
     def _close_device(self, device: InputDevice) -> None:
         fd = device.fd
         try:
@@ -236,4 +262,5 @@ class AltTapListener:
         self.m585_wheel_block_until.pop(fd, None)
         self.m585_wheel_fds.discard(fd)
         self.devices.pop(fd, None)
+        self.device_paths.pop(fd, None)
         device.close()
