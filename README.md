@@ -124,6 +124,8 @@ rm ~/.config/autostart/voice-input-assistant.desktop
 - 开始录音前用 `wpctl` 检查默认麦克风；如果静音或音量接近 0，会自动解除静音并设置为 30%，同时弹出系统通知。
 - 默认播放开始/结束录音音效，可用 `VOICE_INPUT_SOUNDS` 关闭，用 `VOICE_INPUT_SOUND_VOLUME=0..200` 调整相对音量。
 - 录音期间用 Ubuntu 系统通知显示 `录音中 00:00` 计时，停止录音后更新为识别/完成状态。
+- 录音每满 60 秒会以 `VOICE_INPUT_SOUND_VOLUME` 的 50% 播放一次提示音，避免误触后无感长时间录制。
+- 如果连续 20 秒没有检测到语音活动，会自动停止本次录音并继续完成识别/复制/粘贴流程。
 - 识别完成后优先执行 `copyq add -`，把识别文本写入 CopyQ 历史第 0 条。
 - 然后执行 `copyq select 0`，把 CopyQ 最新历史项明确推到当前系统剪贴板。
 - 自动粘贴时再次执行 `copyq select 0`，再执行 `copyq paste`。
@@ -139,6 +141,10 @@ VOICE_INPUT_MIC_TARGET_VOLUME=30
 VOICE_INPUT_NOTIFICATIONS=1
 VOICE_INPUT_SOUNDS=1
 VOICE_INPUT_SOUND_VOLUME=100
+VOICE_INPUT_RECORDING_REMINDER_SECONDS=60
+VOICE_INPUT_SILENCE_TIMEOUT_SECONDS=20
+VOICE_INPUT_VAD_AGGRESSIVENESS=2
+VOICE_INPUT_VAD_MIN_RMS=160
 VOICE_INPUT_COPYQ_HISTORY=1
 VOICE_INPUT_AUTO_PASTE=1
 VOICE_INPUT_PASTE_DELAY_MS=0

@@ -73,6 +73,10 @@ class Config:
     notifications: bool
     sounds: bool
     sound_volume: int
+    recording_reminder_seconds: int
+    silence_timeout_seconds: int
+    vad_aggressiveness: int
+    vad_min_rms: int
     mic_auto_fix: bool
     mic_target_volume: int
     mic_min_volume: int
@@ -117,6 +121,10 @@ class Config:
             notifications=env_bool("VOICE_INPUT_NOTIFICATIONS", True),
             sounds=env_bool("VOICE_INPUT_SOUNDS", True),
             sound_volume=env_int_range("VOICE_INPUT_SOUND_VOLUME", 100, 0, 200),
+            recording_reminder_seconds=env_int("VOICE_INPUT_RECORDING_REMINDER_SECONDS", 60),
+            silence_timeout_seconds=env_int("VOICE_INPUT_SILENCE_TIMEOUT_SECONDS", 20),
+            vad_aggressiveness=env_int_range("VOICE_INPUT_VAD_AGGRESSIVENESS", 2, 0, 3),
+            vad_min_rms=env_int("VOICE_INPUT_VAD_MIN_RMS", 160),
             mic_auto_fix=env_bool("VOICE_INPUT_MIC_AUTO_FIX", True),
             mic_target_volume=env_int("VOICE_INPUT_MIC_TARGET_VOLUME", 30),
             mic_min_volume=env_int("VOICE_INPUT_MIC_MIN_VOLUME", 2),

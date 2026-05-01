@@ -134,8 +134,10 @@ def _gvariant_string(value: str) -> str:
 class SoundPlayer:
     START_EVENT = "device-added"
     STOP_EVENT = "complete"
+    REMINDER_EVENT = "message-new-instant"
     START_FILE = "/usr/share/sounds/freedesktop/stereo/device-added.oga"
     STOP_FILE = "/usr/share/sounds/freedesktop/stereo/complete.oga"
+    REMINDER_FILE = "/usr/share/sounds/freedesktop/stereo/message-new-instant.oga"
 
     def __init__(self, enabled: bool = True, volume_percent: int = 100):
         self.enabled = enabled
@@ -147,14 +149,32 @@ class SoundPlayer:
     def recording_stopped(self) -> None:
         self._play(self.STOP_EVENT, self.STOP_FILE, wait=False)
 
-    def _play(self, event_id: str, sound_file: str, *, wait: bool) -> None:
+    def recording_reminder(self) -> None:
+        self._play(
+            self.REMINDER_EVENT,
+            self.REMINDER_FILE,
+            wait=False,
+            volume_percent=self.volume_percent * 0.5,
+        )
+
+    def _play(
+        self,
+        event_id: str,
+        sound_file: str,
+        *,
+        wait: bool,
+        volume_percent: float | None = None,
+    ) -> None:
         if not self.enabled:
             return
 
-        if self.volume_percent <= 0:
+        if volume_percent is None:
+            volume_percent = self.volume_percent
+
+        if volume_percent <= 0:
             return
 
-        command = self._command(event_id, sound_file, self.volume_percent)
+        command = self._command(event_id, sound_file, volume_percent)
         if command is None:
             return
 
@@ -178,7 +198,7 @@ class SoundPlayer:
             return
 
     @staticmethod
-    def _command(event_id: str, sound_file: str, volume_percent: int) -> list[str] | None:
+    def _command(event_id: str, sound_file: str, volume_percent: float) -> list[str] | None:
         if shutil.which("canberra-gtk-play") is not None:
             volume_db = 20 * log10(volume_percent / 100)
             return [

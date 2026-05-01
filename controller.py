@@ -29,12 +29,30 @@ class VoiceInputController:
                     self.notifier.send_once("语音输入", message, timeout_ms=4000)
                 self.session = VoiceSession(self.config, self.notifier, self.sounds)
                 self.session.start()
+                threading.Thread(
+                    target=self._finish_when_done,
+                    args=(self.session,),
+                    daemon=True,
+                ).start()
                 return
 
             session = self.session
             self.session = None
 
         print("\nStopping...", flush=True)
+        self._finish_session(session)
+
+    def _finish_when_done(self, session: VoiceSession) -> None:
+        session.done_event.wait()
+        with self.lock:
+            if self.session is not session:
+                return
+            self.session = None
+
+        print("\nRecording stopped automatically.", flush=True)
+        self._finish_session(session)
+
+    def _finish_session(self, session: VoiceSession) -> None:
         text = session.stop().strip()
         if not text:
             print("No recognized text. Run with VOICE_INPUT_DEBUG=1 to print ASR responses.", flush=True)
