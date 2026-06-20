@@ -133,7 +133,7 @@ class Config:
             paste_delay_ms=env_int("VOICE_INPUT_PASTE_DELAY_MS", 0),
             alt_debounce_ms=env_int("VOICE_INPUT_ALT_DEBOUNCE_MS", 350),
             m585_wheel_enabled=env_bool("VOICE_INPUT_M585_WHEEL", True),
-            m585_device_names=env_csv("VOICE_INPUT_M585_DEVICE_NAMES", "M585,M590"),
+            m585_device_names=env_csv("VOICE_INPUT_M585_DEVICE_NAMES", "M585,M590,M720"),
             m585_left_sign=env_sign("VOICE_INPUT_M585_LEFT_SIGN", -1),
             m585_intercept=env_bool("VOICE_INPUT_M585_INTERCEPT", True),
             m585_gesture_ms=env_int("VOICE_INPUT_M585_GESTURE_MS", 1200),

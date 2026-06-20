@@ -26,7 +26,7 @@ class AltTapListener:
         debounce_ms: int,
         *,
         m585_wheel_enabled: bool = True,
-        m585_device_names: tuple[str, ...] = ("M585", "M590"),
+        m585_device_names: tuple[str, ...] = ("M585", "M590", "M720"),
         m585_left_sign: int = -1,
         m585_intercept: bool = True,
         m585_gesture_ms: int = 1200,
