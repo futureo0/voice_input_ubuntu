@@ -154,11 +154,12 @@ class VoiceSession:
                 return
 
     def _start_recorder(self) -> subprocess.Popen[bytes]:
+        device, env = self._resolve_capture_device()
         command = [
             "arecord",
             "-q",
             "-D",
-            self.config.audio_device,
+            device,
             "-f",
             "S16_LE",
             "-r",
@@ -174,9 +175,50 @@ class VoiceSession:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 start_new_session=True,
+                env=env,
             )
         except FileNotFoundError:
             raise RuntimeError("arecord not found. Install alsa-utils first.") from None
+
+    def _resolve_capture_device(self) -> tuple[str, dict[str, str]]:
+        """选择采集设备:开启回声消除时录制 PipeWire 的消回声虚拟源。"""
+        env = os.environ.copy()
+        if self.config.echo_cancel == "off":
+            return self.config.audio_device, env
+
+        source = self.config.echo_cancel_source
+        if self._echo_cancel_available(source):
+            env["PIPEWIRE_NODE"] = source
+            if self.config.debug:
+                print(f"DEBUG capture via echo-cancel source: {source}", file=sys.stderr, flush=True)
+            return "pipewire", env
+
+        if self.config.echo_cancel == "on":
+            raise RuntimeError(
+                f"echo-cancel source {source!r} not found while VOICE_INPUT_ECHO_CANCEL=on. "
+                "Check the PipeWire echo-cancel module."
+            )
+        # auto:消回声源不可用时回退到普通设备
+        if self.config.debug:
+            print(
+                f"DEBUG echo-cancel source {source!r} unavailable, falling back to {self.config.audio_device}",
+                file=sys.stderr,
+                flush=True,
+            )
+        return self.config.audio_device, env
+
+    @staticmethod
+    def _echo_cancel_available(source: str) -> bool:
+        try:
+            result = subprocess.run(
+                ["pw-cli", "ls", "Node"],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return False
+        return f'node.name = "{source}"' in result.stdout
 
     def _should_play_reminder(self, now: float, next_reminder_at: float) -> bool:
         return self.config.recording_reminder_seconds > 0 and now >= next_reminder_at

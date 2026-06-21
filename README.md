@@ -119,6 +119,14 @@ pkill -f '/home/futureoo/Desktop/voice_input/voice_input.py'
 rm ~/.config/autostart/voice-input-assistant.desktop
 ```
 
+## 回声消除(去除电脑自己发出的声音)
+
+外放播放音乐/视频/会议时录音，麦克风会把扬声器的声音也录进去，干扰识别。本项目支持用 PipeWire 的回声消除(AEC)在录音时去除“电脑自身播放的声音”，无需静音或暂停其它音频；戴耳机时本来就没有回声，开启也无副作用。
+
+- 一次性配置:把 `docs/pipewire/99-voice-input-echo-cancel.conf` 复制到 `~/.config/pipewire/pipewire.conf.d/`，执行 `systemctl --user restart pipewire pipewire-pulse wireplumber`，然后用 `wpctl status` 确认默认麦克风仍是真实麦克风(必要时 `wpctl set-default <id>` 改回)。
+- 用 `VOICE_INPUT_ECHO_CANCEL=auto|on|off` 控制(默认 `auto`:有消回声源就用，没有则回退到普通麦克风)。
+- 依赖 WebRTC AEC 插件 `libspa-aec-webrtc`；削减幅度取决于系统 `webrtc-audio-processing` 版本(旧版约 −10dB，新版 AEC3 更强)。
+
 ## 默认行为
 
 - 开始录音前用 `wpctl` 检查默认麦克风；如果静音或音量接近 0，会自动解除静音并设置为 30%，同时弹出系统通知。

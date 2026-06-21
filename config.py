@@ -55,6 +55,14 @@ def env_sign(name: str, default: int) -> int:
     return -1 if value < 0 else 1
 
 
+def env_choice(name: str, default: str, choices: tuple[str, ...]) -> str:
+    value = os.getenv(name, default).strip().lower()
+    if value not in choices:
+        allowed = ", ".join(choices)
+        raise SystemExit(f"{name} must be one of {allowed}, got: {value!r}")
+    return value
+
+
 @dataclass(frozen=True)
 class Config:
     app_key: str
@@ -63,6 +71,8 @@ class Config:
     endpoint: str
     uid: str
     audio_device: str
+    echo_cancel: str
+    echo_cancel_source: str
     sample_rate: int
     chunk_ms: int
     final_timeout: int
@@ -111,6 +121,12 @@ class Config:
             ).strip(),
             uid=os.getenv("VOLC_ASR_UID", "voice-input").strip(),
             audio_device=os.getenv("VOICE_INPUT_AUDIO_DEVICE", "default").strip(),
+            echo_cancel=env_choice(
+                "VOICE_INPUT_ECHO_CANCEL", "auto", ("auto", "on", "off")
+            ),
+            echo_cancel_source=os.getenv(
+                "VOICE_INPUT_ECHO_CANCEL_SOURCE", "echo-cancel-source"
+            ).strip(),
             sample_rate=env_int("VOICE_INPUT_SAMPLE_RATE", 16000),
             chunk_ms=env_int("VOICE_INPUT_CHUNK_MS", 200),
             final_timeout=env_int("VOICE_INPUT_FINAL_TIMEOUT", 12),
