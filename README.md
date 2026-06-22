@@ -123,9 +123,11 @@ rm ~/.config/autostart/voice-input-assistant.desktop
 
 外放播放音乐/视频/会议时录音，麦克风会把扬声器的声音也录进去，干扰识别。本项目支持用 PipeWire 的回声消除(AEC)在录音时去除“电脑自身播放的声音”，无需静音或暂停其它音频；戴耳机时本来就没有回声，开启也无副作用。
 
-- 一次性配置:把 `docs/pipewire/99-voice-input-echo-cancel.conf` 复制到 `~/.config/pipewire/pipewire.conf.d/`，执行 `systemctl --user restart pipewire pipewire-pulse wireplumber`，然后用 `wpctl status` 确认默认麦克风仍是真实麦克风(必要时 `wpctl set-default <id>` 改回)。
-- 用 `VOICE_INPUT_ECHO_CANCEL=auto|on|off` 控制(默认 `auto`:有消回声源就用，没有则回退到普通麦克风)。
+- **按需加载，无需常驻配置**:录音开始时才用 `pipewire -c docs/pipewire/voice-input-aec.conf` 临时拉起一个消回声虚拟麦克风(`echo-cancel-source`)，录音一结束就终止它、立即释放真实麦克风。所以**空闲时完全不占用麦克风**，GNOME 顶栏的麦克风图标只在你真正录音的那几秒亮起，而不是开机后一直橙色。开箱即用，不用往 `~/.config/pipewire/pipewire.conf.d/` 里放任何文件。
+- 用 `VOICE_INPUT_ECHO_CANCEL=auto|on|off` 控制(默认 `auto`:能拉起消回声源就用，拉不起来则回退到普通麦克风；`on` 拉不起来会直接报错；`off` 始终录真实麦克风)。
+- 代价:每次录音启动多约 0.1s 用于拉起 AEC，且回声消除滤波器在录音最初一瞬间才开始收敛。
 - 依赖 WebRTC AEC 插件 `libspa-aec-webrtc`；削减幅度取决于系统 `webrtc-audio-processing` 版本(旧版约 −10dB，新版 AEC3 更强)。
+- 进阶:用 `VOICE_INPUT_ECHO_CANCEL_CONF` 可指定自定义的 AEC context 配置文件路径(默认即上面那个)。若你仍想用旧的“开机常驻”方式(代价是麦克风图标一直亮)，把一份 `context.modules` 配置放进 `~/.config/pipewire/pipewire.conf.d/` 即可——本工具检测到 `echo-cancel-source` 已存在时会直接复用、不再另起进程。
 
 ## 默认行为
 

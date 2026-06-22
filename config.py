@@ -73,6 +73,7 @@ class Config:
     audio_device: str
     echo_cancel: str
     echo_cancel_source: str
+    echo_cancel_conf: str
     sample_rate: int
     chunk_ms: int
     final_timeout: int
@@ -126,6 +127,10 @@ class Config:
             ),
             echo_cancel_source=os.getenv(
                 "VOICE_INPUT_ECHO_CANCEL_SOURCE", "echo-cancel-source"
+            ).strip(),
+            echo_cancel_conf=os.getenv(
+                "VOICE_INPUT_ECHO_CANCEL_CONF",
+                str(Path(__file__).resolve().parent / "docs" / "pipewire" / "voice-input-aec.conf"),
             ).strip(),
             sample_rate=env_int("VOICE_INPUT_SAMPLE_RATE", 16000),
             chunk_ms=env_int("VOICE_INPUT_CHUNK_MS", 200),

@@ -27,6 +27,8 @@ class VoiceSession:
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.latest_text = ""
         self.error: BaseException | None = None
+        self._aec_proc: subprocess.Popen[bytes] | None = None
+        self._aec_owned = False
         self.sent_chunks = 0
         self.sent_bytes = 0
         self.received_payloads = 0
@@ -101,6 +103,7 @@ class VoiceSession:
 
             self._stop_recorder(recorder)
             recorder = None
+            self._stop_echo_cancel()  # 采集结束立即释放真实麦克风,不等 ASR 收尾
             self.sounds.recording_stopped()
             self.progress.stop_for_recognition()
             self.final_response_event.wait(self.config.final_timeout)
@@ -121,6 +124,7 @@ class VoiceSession:
                 self.progress.thread.join(timeout=1)
             if recorder is not None:
                 self._stop_recorder(recorder)
+            self._stop_echo_cancel()  # 兜底:异常路径也确保释放麦克风
             self.done_event.set()
             client.close()
 
@@ -181,13 +185,13 @@ class VoiceSession:
             raise RuntimeError("arecord not found. Install alsa-utils first.") from None
 
     def _resolve_capture_device(self) -> tuple[str, dict[str, str]]:
-        """选择采集设备:开启回声消除时录制 PipeWire 的消回声虚拟源。"""
+        """选择采集设备:开启回声消除时按需拉起消回声虚拟源并录制它。"""
         env = os.environ.copy()
         if self.config.echo_cancel == "off":
             return self.config.audio_device, env
 
         source = self.config.echo_cancel_source
-        if self._echo_cancel_available(source):
+        if self._start_echo_cancel():
             env["PIPEWIRE_NODE"] = source
             if self.config.debug:
                 print(f"DEBUG capture via echo-cancel source: {source}", file=sys.stderr, flush=True)
@@ -195,17 +199,80 @@ class VoiceSession:
 
         if self.config.echo_cancel == "on":
             raise RuntimeError(
-                f"echo-cancel source {source!r} not found while VOICE_INPUT_ECHO_CANCEL=on. "
-                "Check the PipeWire echo-cancel module."
+                f"echo-cancel source {source!r} not available while VOICE_INPUT_ECHO_CANCEL=on. "
+                "Check pipewire and the WebRTC AEC plugin (libspa-aec-webrtc)."
             )
-        # auto:消回声源不可用时回退到普通设备
+        # auto:消回声不可用时回退到普通设备
         if self.config.debug:
             print(
-                f"DEBUG echo-cancel source {source!r} unavailable, falling back to {self.config.audio_device}",
+                f"DEBUG echo-cancel unavailable, falling back to {self.config.audio_device}",
                 file=sys.stderr,
                 flush=True,
             )
         return self.config.audio_device, env
+
+    def _start_echo_cancel(self) -> bool:
+        """按需拉起回声消除虚拟麦克风,成功返回 True。
+
+        若 echo-cancel-source 已存在(例如用户仍保留了常驻配置),直接复用且不接管它的
+        生命周期;否则用独立的 `pipewire -c <conf>` context 临时加载,录音结束后由
+        _stop_echo_cancel 终止以释放真实麦克风。这样空闲时不占用麦克风。
+        """
+        source = self.config.echo_cancel_source
+        if self._echo_cancel_available(source):
+            self._aec_owned = False
+            return True
+
+        conf = self.config.echo_cancel_conf
+        if not os.path.exists(conf):
+            if self.config.debug:
+                print(f"DEBUG echo-cancel conf not found: {conf}", file=sys.stderr, flush=True)
+            return False
+
+        try:
+            self._aec_proc = subprocess.Popen(
+                ["pipewire", "-c", conf],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
+        except FileNotFoundError:
+            if self.config.debug:
+                print("DEBUG pipewire binary not found; cannot start echo-cancel", file=sys.stderr, flush=True)
+            return False
+
+        self._aec_owned = True
+        deadline = time.monotonic() + 3.0
+        while time.monotonic() < deadline:
+            if self._aec_proc.poll() is not None:
+                break  # context 进程提前退出,加载失败
+            if self._echo_cancel_available(source):
+                return True
+            time.sleep(0.05)
+
+        self._stop_echo_cancel()  # 超时或启动失败:清理掉半拉起的 context
+        return False
+
+    def _stop_echo_cancel(self) -> None:
+        """终止本会话拉起的回声消除 context,释放真实麦克风(幂等)。"""
+        proc = self._aec_proc
+        self._aec_proc = None
+        if proc is None or not self._aec_owned:
+            return
+        self._aec_owned = False
+        if proc.poll() is not None:
+            return
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+            proc.wait(timeout=2)
+        except ProcessLookupError:
+            return
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait(timeout=2)
+            except ProcessLookupError:
+                return
 
     @staticmethod
     def _echo_cancel_available(source: str) -> bool:
