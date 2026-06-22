@@ -185,10 +185,18 @@ class AltTapListener:
     def _trigger_m585_wheel(self, device: InputDevice) -> None:
         now = time.monotonic()
         block_until = self.m585_wheel_block_until.get(device.fd, 0.0)
-        self.m585_wheel_block_until[device.fd] = now + self.m585_gesture_seconds
-        if now >= block_until and now - self.last_tap_at >= self.debounce_seconds:
+        fire = now >= block_until and now - self.last_tap_at >= self.debounce_seconds
+        if fire:
             self.last_tap_at = now
             self.on_alt_tap()
+        # 关键:用"处理完之后"的时间重置手势窗口。停止录音时 on_alt_tap 会同步阻塞
+        # 数秒等待 ASR 收尾,而同一次物理左拨剩下的 HWHEEL 事件会被缓冲、阻塞结束
+        # 后才被读到。若仍按触发前的时间戳算窗口,这些迟到事件会因 monotonic 已走过
+        # 1.2s 窗口而被误判为"新的一次左拨",从而停止后立刻又开始一次新录音。
+        after = time.monotonic()
+        self.m585_wheel_block_until[device.fd] = after + self.m585_gesture_seconds
+        if fire:
+            self.last_tap_at = after
 
     def _is_m585_wheel_device(self, device: InputDevice) -> bool:
         if not self.m585_wheel_enabled:
