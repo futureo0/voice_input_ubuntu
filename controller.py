@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import threading
 
 from clipboard import Clipboard
@@ -53,7 +54,21 @@ class VoiceInputController:
         self._finish_session(session)
 
     def _finish_session(self, session: VoiceSession) -> None:
-        text = session.stop().strip()
+        try:
+            text = session.stop().strip()
+        except Exception as exc:
+            error = str(exc)
+            print(f"Voice input failed: {error}", file=sys.stderr, flush=True)
+            if "not granted" in error or "requested resource not granted" in error:
+                message = (
+                    "语音识别服务拒绝连接：当前应用没有可用的资源授权。"
+                    "请在火山引擎控制台检查服务状态和授权，"
+                    "并核对 .env 中的 VOLC_ASR_RESOURCE_ID。"
+                )
+            else:
+                message = f"语音输入失败：{error}"
+            self.notifier.replace("语音输入失败", message, timeout_ms=8000)
+            return
         if not text:
             print("No recognized text. Run with VOICE_INPUT_DEBUG=1 to print ASR responses.", flush=True)
             self.notifier.replace("语音输入", "没有识别到文本", timeout_ms=3000)
