@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=重启语音输入
+Comment=结束卡住的语音输入进程并重新启动
+Exec=/usr/bin/python3 /home/futureoo/Desktop/voice_input/restart_voice_input.py
+Path=/home/futureoo/Desktop/voice_input
+Icon=audio-input-microphone
+Terminal=false
+StartupNotify=false
+Categories=Utility;

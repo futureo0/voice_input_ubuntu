@@ -95,6 +95,9 @@ python voice_input.py
 
 ## 开机自启
 
+如果语音输入卡住或触发没有反应，使用桌面启动器 `重启语音输入.desktop`；若桌面
+提示不可信，右键选择“允许启动”后再双击。
+
 本项目提供 `run_voice_input.sh` 和 `voice-input-assistant.desktop`。已安装到当前用户的自启动目录后，登录桌面时会自动运行：
 
 ```bash
